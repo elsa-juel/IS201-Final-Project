@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bread 2048 — Rise & Merge</title>
+  <style>
+    :root{
+      --bg: #f7f2e8;
+      --panel: #fff8ef;
+      --grid: #d7c6b2;
+      --cell: #eadccc;
+      --text: #3a2c20;
+      --muted: #7a6655;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+      --radius: 18px;
+      --gap: 12px;
+      --board: min(92vw, 520px);
+      --cellSize: calc((var(--board) - (var(--gap) * 5)) / 4);
+      --speed: 130ms;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: var(--font);
+      background:
+        radial-gradient(1200px 500px at 50% -50%, #fff, transparent 60%),
+        radial-gradient(800px 400px at 10% 10%, rgba(181, 223, 181, .25), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 22px;
+    }
+
+    .app{
+      width: min(980px, 100%);
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    header{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap: 6px;
+    }
+
+    h1{
+      margin:0;
+      letter-spacing:-0.02em;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+    }
+
+    .subtitle{
+      margin:0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .stats{
+      display:flex;
+      gap: 10px;
+      align-items:stretch;
+      flex-wrap: wrap;
+    }
+
+    .pill{
+      background: var(--panel);
+      border: 1px solid rgba(58,44,32,.10);
+      border-radius: 14px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+      min-width: 120px;
+    }
+    .pill .label{
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .pill .value{
+      font-weight: 800;
+      font-size: 18px;
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+
+    .actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+      justify-content: flex-end;
+    }
+
+    button{
+      appearance:none;
+      border: 1px solid rgba(58,44,32,.14);
+      background: #ffffff;
+      color: var(--text);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor:pointer;
+      box-shadow: 0 8px 18px rgba(0,0,0,.06);
+      transition: transform 100ms ease, box-shadow 100ms ease;
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+    button:hover{ transform: translateY(-1px); box-shadow: 0 12px 24px rgba(0,0,0,.10); }
+    button:active{ transform: translateY(0px); box-shadow: 0 8px 18px rgba(0,0,0,.06); }
+    button:focus{ outline: 3px solid rgba(127,143,117,.35); outline-offset: 2px; }
+
+    .layout{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      align-items:start;
+    }
+
+    @media (min-width: 860px){
+      .layout{
+        grid-template-columns: 1fr 320px;
+      }
+    }
+
+    .boardWrap{
+      position: relative;
+      width: var(--board);
+      margin: 0 auto;
+    }
+
+    .board{
+      background: var(--grid);
+      border-radius: var(--radius);
+      padding: var(--gap);
+      box-shadow: var(--shadow);
+      position: relative;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .cells{
+      display:grid;
+      grid-template-columns: repeat(4, var(--cellSize));
+      grid-template-rows: repeat(4, var(--cellSize));
+      gap: var(--gap);
+    }
+
+    .cell{
+      background: rgba(255,255,255,.35);
+      border-radius: 14px;
+    }
+
+    .tiles{
+      position:absolute;
+      inset: var(--gap);
+      pointer-events:none;
+    }
+
+    .tile{
+      position:absolute;
+      width: var(--cellSize);
+      height: var(--cellSize);
+      border-radius: 14px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      font-weight: 900;
+      box-shadow: 0 10px 18px rgba(0,0,0,.10);
+      transform: translate(var(--x), var(--y));
+      transition: transform var(--speed) ease;
+      overflow:hidden;
+      border: 1px solid rgba(58,44,32,.12);
+    }
+
+    .tile .emoji{
+      font-size: clamp(20px, 2.6vw, 34px);
+      line-height: 1;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,.08));
+    }
+    .tile .name{
+      margin-top: 6px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      opacity: .9;
+    }
+    .tile .num{
+      margin-top: 3px;
+      font-size: 12px;
+      font-weight: 800;
+      opacity: .85;
+    }
+
+    .pop{
+      animation: pop 140ms ease-out;
+    }
+    @keyframes pop{
+      from{ transform: translate(var(--x), var(--y)) scale(.88); }
+      to{ transform: translate(var(--x), var(--y)) scale(1); }
+    }
+
+    .overlay{
+      position:absolute;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+    }
+    .overlay.show{ display:flex; }
+
+    .modal{
+      width: min(92%, 420px);
+      background: rgba(255,248,239,.92);
+      border: 1px solid rgba(58,44,32,.14);
+      border-radius: 20px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.18);
+      padding: 18px;
+      text-align:center;
+      backdrop-filter: blur(8px);
+    }
+    .modal h2{ margin: 6px 0 6px; font-size: 22px; }
+    .modal p{ margin: 0 0 12px; color: var(--muted); }
+
+    .side{
+      background: var(--panel);
+      border: 1px solid rgba(58,44,32,.10);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .side h3{
+      margin: 4px 0 10px;
+      font-size: 16px;
+      letter-spacing: -.01em;
+    }
+
+    .how{
+      margin:0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .how li{ margin: 6px 0; }
+
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size: 12px;
+      background: rgba(58,44,32,.06);
+      border: 1px solid rgba(58,44,32,.10);
+      padding: 2px 6px;
+      border-radius: 8px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .toast{
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(168,182,161,.22);
+      border: 1px solid rgba(127,143,117,.35);
+      color: #2a2c24;
+      font-size: 13px;
+      display:none;
+    }
+    .toast.show{ display:block; }
+
+    /* Bread-y tile colors */
+    .v2   { background: linear-gradient(180deg, #fff6df, #f1e1bf); }
+    .v4   { background: linear-gradient(180deg, #ffe9c2, #f0d2a4); }
+    .v8   { background: linear-gradient(180deg, #ffd7a5, #e9b882); }
+    .v16  { background: linear-gradient(180deg, #f7c18c, #df9c63); color: #2c1f15; }
+    .v32  { background: linear-gradient(180deg, #eeb27a, #cf834a); color: #2c1f15; }
+    .v64  { background: linear-gradient(180deg, #e69d64, #b86a33); color: #fff; border-color: rgba(255,255,255,.18); }
+    .v128 { background: linear-gradient(180deg, #f3d27f, #d7a62c); color:#2c1f15; }
+    .v256 { background: linear-gradient(180deg, #b9e2b9, #7fbf7f); color:#1f2a1f; }
+    .v512 { background: linear-gradient(180deg, #9ad8b1, #4fa97e); color:#0f2318; }
+    .v1024{ background: linear-gradient(180deg, #8fd0c7, #3f9f95); color:#06211f; }
+    .v2048{ background: linear-gradient(180deg, #fff0a6, #f3c63a); color:#2c1f15; box-shadow: 0 16px 28px rgba(243,198,58,.35); }
+
+    .smallprint{
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title">
+        <h1>🍞 Bread 2048</h1>
+        <p class="subtitle">Rise, merge, and bake your way to the legendary loaf.</p>
+      </div>
+
+      <div class="stats">
+        <div class="pill" aria-live="polite">
+          <div class="label">Score</div>
+          <div class="value"><span id="score">0</span></div>
+        </div>
+        <div class="pill" aria-live="polite">
+          <div class="label">Best</div>
+          <div class="value"><span id="best">0</span></div>
+        </div>
+        <div class="actions">
+          <button id="newBtn" title="Start a fresh bake">🔁 New</button>
+          <button id="undoBtn" title="Undo last move">↩️ Undo</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="boardWrap">
+        <div class="board" id="board" role="application" aria-label="Bread 2048 board">
+          <div class="cells" aria-hidden="true">
+            <!-- 16 background cells -->
+          </div>
+          <div class="tiles" id="tiles" aria-hidden="true"></div>
+
+          <div class="overlay" id="overlay" aria-live="polite">
+            <div class="modal">
+              <div style="font-size:38px; line-height:1;">🥐</div>
+              <h2 id="overTitle">Game Over</h2>
+              <p id="overText">No more moves. Time to proof again.</p>
+              <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+                <button id="tryAgainBtn">🍞 Try Again</button>
+                <button id="keepPlayingBtn" style="display:none;">🥖 Keep Playing</button>
+              </div>
+              <div class="smallprint">Tip: Use <span class="kbd">WASD</span> or arrow keys. On mobile, swipe.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <h3>How to play</h3>
+        <ol class="how">
+          <li>Use <span class="kbd">↑</span><span class="kbd">↓</span><span class="kbd">←</span><span class="kbd">→</span> (or <span class="kbd">WASD</span>) to slide tiles.</li>
+          <li>Matching breads merge into the next bake level.</li>
+          <li>Reach <strong>2048</strong> for the legendary loaf 🎉</li>
+        </ol>
+
+        <div class="toast" id="toast"></div>
+
+        <div class="smallprint">
+          Saves your best score in this browser. Undo works for 1 move at a time.
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ---- Setup background cells ----
+    (function buildBackground(){
+      const cells = document.querySelector(".cells");
+      for(let i=0;i<16;i++){
+        const d = document.createElement("div");
+        d.className = "cell";
+        cells.appendChild(d);
+      }
+    })();
+
+    // ---- Bread theme mapping ----
+    const BREAD = new Map([
+      [2,   {emoji:"🌾", name:"Grain"}],
+      [4,   {emoji:"🥣", name:"Starter"}],
+      [8,   {emoji:"🍞", name:"Dough"}],
+      [16,  {emoji:"🥖", name:"Baguette"}],
+      [32,  {emoji:"🥨", name:"Pretzel"}],
+      [64,  {emoji:"🥐", name:"Croissant"}],
+      [128, {emoji:"🫓", name:"Flatbread"}],
+      [256, {emoji:"🍞", name:"Sandwich"}],
+      [512, {emoji:"🧄", name:"Garlic"}],
+      [1024,{emoji:"🧈", name:"Buttery"}],
+      [2048,{emoji:"👑", name:"Legend"}],
+    ]);
+
+    const SIZE = 4;
+    const scoreEl = document.getElementById("score");
+    const bestEl  = document.getElementById("best");
+    const tilesEl = document.getElementById("tiles");
+    const boardEl = document.getElementById("board");
+    const overlayEl = document.getElementById("overlay");
+    const overTitleEl = document.getElementById("overTitle");
+    const overTextEl = document.getElementById("overText");
+    const keepPlayingBtn = document.getElementById("keepPlayingBtn");
+    const toastEl = document.getElementById("toast");
+
+    const newBtn = document.getElementById("newBtn");
+    const undoBtn = document.getElementById("undoBtn");
+    const tryAgainBtn = document.getElementById("tryAgainBtn");
+
+    let grid, score, best, won, allowContinue;
+    let prevState = null; // for undo (one step)
+
+    best = Number(localStorage.getItem("bread2048_best") || 0);
+    bestEl.textContent = best;
+
+    function emptyGrid(){
+      return Array.from({length: SIZE}, () => Array(SIZE).fill(0));
+    }
+
+    function cloneState(state){
+      return {
+        grid: state.grid.map(row => row.slice()),
+        score: state.score,
+        won: state.won,
+        allowContinue: state.allowContinue
+      };
+    }
+
+    function savePrev(){
+      prevState = cloneState({grid, score, won, allowContinue});
+      undoBtn.disabled = false;
+      undoBtn.style.opacity = "1";
+    }
+
+    function restorePrev(){
+      if(!prevState) return;
+      grid = prevState.grid.map(r => r.slice());
+      score = prevState.score;
+      won = prevState.won;
+      allowContinue = prevState.allowContinue;
+      prevState = null;
+      undoBtn.disabled = true;
+      undoBtn.style.opacity = ".55";
+      hideOverlay();
+      render(true);
+    }
+
+    function startGame(){
+      grid = emptyGrid();
+      score = 0;
+      won = false;
+      allowContinue = false;
+      prevState = null;
+      undoBtn.disabled = true;
+      undoBtn.style.opacity = ".55";
+      hideOverlay();
+      spawn();
+      spawn();
+      render(true);
+      toast("");
+    }
+
+    function toast(msg){
+      if(!msg){
+        toastEl.classList.remove("show");
+        toastEl.textContent = "";
+        return;
+      }
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastEl._t);
+      toastEl._t = setTimeout(()=>toast(""), 2500);
+    }
+
+    function randChoice(arr){
+      return arr[Math.floor(Math.random()*arr.length)];
+    }
+
+    function emptyCells(){
+      const cells = [];
+      for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+          if(grid[r][c] === 0) cells.push({r,c});
+        }
+      }
+      return cells;
+    }
+
+    function spawn(){
+      const empties = emptyCells();
+      if(empties.length === 0) return false;
+      const {r,c} = randChoice(empties);
+      grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+      return true;
+    }
+
+    function canMove(){
+      if(emptyCells().length) return true;
+      for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+          const v = grid[r][c];
+          if(r+1<SIZE && grid[r+1][c] === v) return true;
+          if(c+1<SIZE && grid[r][c+1] === v) return true;
+        }
+      }
+      return false;
+    }
+
+    // ---- Movement helpers ----
+    function slideLine(line){
+      // line: array of 4 numbers
+      const filtered = line.filter(v => v !== 0);
+      const merged = [];
+      let gain = 0;
+      for(let i=0;i<filtered.length;i++){
+        if(i < filtered.length-1 && filtered[i] === filtered[i+1]){
+          const nv = filtered[i]*2;
+          merged.push(nv);
+          gain += nv;
+          i++;
+        } else {
+          merged.push(filtered[i]);
+        }
+      }
+      while(merged.length < SIZE) merged.push(0);
+      return {line: merged, gain};
+    }
+
+    function move(dir){
+      // returns {moved:boolean, gained:number, wonThisMove:boolean}
+      let moved = false;
+      let gained = 0;
+      let wonNow = false;
+
+      const before = grid.map(r => r.slice());
+
+      function setCell(r,c,val){ grid[r][c] = val; }
+
+      if(dir === "left" || dir === "right"){
+        for(let r=0;r<SIZE;r++){
+          let line = grid[r].slice();
+          if(dir === "right") line.reverse();
+          const res = slideLine(line);
+          let out = res.line;
+          if(dir === "right") out = out.slice().reverse();
+          for(let c=0;c<SIZE;c++){
+            if(grid[r][c] !== out[c]) moved = true;
+            setCell(r,c,out[c]);
+            if(out[c] === 2048) wonNow = true;
+          }
+          gained += res.gain;
+        }
+      } else if(dir === "up" || dir === "down"){
+        for(let c=0;c<SIZE;c++){
+          let line = [];
+          for(let r=0;r<SIZE;r++) line.push(grid[r][c]);
+          if(dir === "down") line.reverse();
+          const res = slideLine(line);
+          let out = res.line;
+          if(dir === "down") out = out.slice().reverse();
+          for(let r=0;r<SIZE;r++){
+            if(grid[r][c] !== out[r]) moved = true;
+            setCell(r,c,out[r]);
+            if(out[r] === 2048) wonNow = true;
+          }
+          gained += res.gain;
+        }
+      }
+
+      // guard against false positives due to floating logic (just in case)
+      if(!moved){
+        // restore grid to before (no change)
+        grid = before;
+        return {moved:false, gained:0, wonThisMove:false};
+      }
+      return {moved:true, gained, wonThisMove:wonNow};
+    }
+
+    // ---- Rendering ----
+    function cellToXY(r,c){
+      const cellSize = getCellSize();
+      const gap = getGap();
+      const x = c * (cellSize + gap);
+      const y = r * (cellSize + gap);
+      return {x, y};
+    }
+
+    function getGap(){
+      return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gap")) || 12;
+    }
+    function getCellSize(){
+      // computed from CSS; we can measure a background cell too
+      const one = document.querySelector(".cell");
+      return one ? one.getBoundingClientRect().width : 100;
+    }
+
+    function render(full=false){
+      scoreEl.textContent = score;
+      if(score > best){
+        best = score;
+        bestEl.textContent = best;
+        localStorage.setItem("bread2048_best", String(best));
+      }
+
+      // Build tile list from grid
+      const tiles = [];
+      for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+          const v = grid[r][c];
+          if(v) tiles.push({r,c,v, id: `${r}-${c}-${v}`});
+        }
+      }
+
+      // If full, clear all and re-add (simple, stable)
+      if(full){
+        tilesEl.innerHTML = "";
+      }
+
+      // We will fully re-render each time (small board; easiest)
+      tilesEl.innerHTML = "";
+      for(const t of tiles){
+        const d = document.createElement("div");
+        const cls = `tile v${t.v}`;
+        d.className = cls;
+        const {x,y} = cellToXY(t.r,t.c);
+        d.style.setProperty("--x", x + "px");
+        d.style.setProperty("--y", y + "px");
+
+        const meta = BREAD.get(t.v) || {emoji:"🍞", name:`Bread ${t.v}`};
+        d.innerHTML = `
+          <div class="emoji">${meta.emoji}</div>
+          <div class="name">${meta.name}</div>
+          <div class="num">${t.v}</div>
+        `;
+        tilesEl.appendChild(d);
+      }
+    }
+
+    function showOverlay(type){
+      // type: "win" | "lose"
+      overlayEl.classList.add("show");
+      if(type === "win"){
+        overTitleEl.textContent = "You baked 2048! 👑";
+        overTextEl.textContent = "Legendary loaf achieved. Keep playing if you dare.";
+        keepPlayingBtn.style.display = "inline-flex";
+      } else {
+        overTitleEl.textContent = "No more moves 😵‍💫";
+        overTextEl.textContent = "Your dough has nowhere to rise. Start a new bake?";
+        keepPlayingBtn.style.display = "none";
+      }
+    }
+
+    function hideOverlay(){
+      overlayEl.classList.remove("show");
+    }
+
+    // ---- Input ----
+    function handleMove(dir){
+      if(overlayEl.classList.contains("show") && !allowContinue) return;
+
+      // Save for undo
+      savePrev();
+
+      const res = move(dir);
+      if(!res.moved){
+        // nothing happened; don't consume undo
+        prevState = null;
+        undoBtn.disabled = true;
+        undoBtn.style.opacity = ".55";
+        return;
+      }
+
+      score += res.gained;
+
+      // spawn new tile
+      spawn();
+
+      // render
+      render(true);
+
+      // win/lose checks
+      if(res.wonThisMove && !won){
+        won = true;
+        if(!allowContinue){
+          showOverlay("win");
+          toast("You reached 2048! 👑");
+        }
+      }
+
+      if(!canMove()){
+        showOverlay("lose");
+        toast("No moves left. 💀");
+      }
+    }
+
+    window.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      const map = {
+        "arrowleft":"left",
+        "arrowright":"right",
+        "arrowup":"up",
+        "arrowdown":"down",
+        "a":"left","d":"right","w":"up","s":"down"
+      };
+      if(map[k]){
+        e.preventDefault();
+        handleMove(map[k]);
+      } else if(k === "r"){
+        startGame();
+      } else if((e.ctrlKey || e.metaKey) && k === "z"){
+        e.preventDefault();
+        restorePrev();
+      }
+    });
+
+    // Touch swipe
+    let touchStart = null;
+    boardEl.addEventListener("touchstart", (e) => {
+      if(!e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      touchStart = {x:t.clientX, y:t.clientY, time: Date.now()};
+    }, {passive:true});
+
+    boardEl.addEventListener("touchend", (e) => {
+      if(!touchStart) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStart.x;
+      const dy = t.clientY - touchStart.y;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const dt = Date.now() - touchStart.time;
+
+      // basic swipe threshold
+      if((adx < 28 && ady < 28) || dt > 900){ touchStart = null; return; }
+
+      if(adx > ady){
+        handleMove(dx > 0 ? "right" : "left");
+      } else {
+        handleMove(dy > 0 ? "down" : "up");
+      }
+      touchStart = null;
+    }, {passive:true});
+
+    // Mouse drag swipe (nice on trackpads too)
+    let dragStart = null;
+    boardEl.addEventListener("pointerdown", (e) => {
+      boardEl.setPointerCapture?.(e.pointerId);
+      dragStart = {x:e.clientX, y:e.clientY, time: Date.now()};
+    });
+    boardEl.addEventListener("pointerup", (e) => {
+      if(!dragStart) return;
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const dt = Date.now() - dragStart.time;
+      if((adx < 22 && ady < 22) || dt > 900){ dragStart = null; return; }
+      if(adx > ady){
+        handleMove(dx > 0 ? "right" : "left");
+      } else {
+        handleMove(dy > 0 ? "down" : "up");
+      }
+      dragStart = null;
+    });
+
+    // Buttons
+    newBtn.addEventListener("click", startGame);
+    undoBtn.addEventListener("click", restorePrev);
+    tryAgainBtn.addEventListener("click", startGame);
+    keepPlayingBtn.addEventListener("click", () => {
+      allowContinue = true;
+      hideOverlay();
+      toast("Keep baking! 🥖");
+    });
+
+    // Resize re-render for accurate positioning
+    window.addEventListener("resize", () => render(true));
+
+    // Start
+    startGame();
+  </script>
+</body>
+</html>
